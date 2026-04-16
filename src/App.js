@@ -13,10 +13,9 @@ import {
   Clock, ShieldCheck,
 } from "lucide-react";
 
-// --- 1. FIREBASE CONFIGURATION ---
-// Replace the "dummy-key" strings with your actual keys from Firebase Console if you have them!
+// --- 1. FIREBASE SETUP ---
 const firebaseConfig = {
-  apiKey: "YOUR_ACTUAL_API_KEY", 
+  apiKey: "YOUR_API_KEY", // Replace with your real key from Firebase
   authDomain: "inshape-app.firebaseapp.com",
   projectId: "inshape-app",
   storageBucket: "inshape-app.appspot.com",
@@ -35,7 +34,6 @@ export default function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [authError, setAuthError] = useState("");
 
-  // Listen for Auth changes (This stops the "flash" of the login screen)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -55,28 +53,17 @@ export default function App() {
   const handleGoogleLogin = async () => {
     setIsAuthenticating(true);
     setAuthError("");
-
     try {
-      if (firebaseConfig.apiKey === "YOUR_ACTUAL_API_KEY") {
-        throw new Error("Firebase API Key is missing. Add it to the code!");
-      }
-
       const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
       setUserProfile({
-        name: user.displayName,
-        email: user.email,
-        photo: user.photoURL,
+        name: result.user.displayName,
+        email: result.user.email,
+        photo: result.user.photoURL,
       });
       setAppState("onboarding");
     } catch (error) {
-      console.error("Google Auth Error:", error);
-      if (error.code === 'auth/unauthorized-domain') {
-        setAuthError("Domain not authorized in Firebase Console.");
-      } else {
-        setAuthError("Login failed. Check your connection.");
-      }
+      console.error(error);
+      setAuthError("Login failed. Check if popups are blocked.");
     } finally {
       setIsAuthenticating(false);
     }
@@ -96,10 +83,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-stone-800 font-sans selection:bg-emerald-100">
       <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-up { animation: fadeUp 0.6s ease-out forwards; opacity: 0; }
         .delay-100 { animation-delay: 100ms; }
         .delay-200 { animation-delay: 200ms; }
@@ -107,11 +91,7 @@ export default function App() {
       `}</style>
 
       {appState === "login" && (
-        <LandingPage
-          onLogin={handleGoogleLogin}
-          isAuthenticating={isAuthenticating}
-          authError={authError}
-        />
+        <LandingPage onLogin={handleGoogleLogin} isAuthenticating={isAuthenticating} authError={authError} />
       )}
       {appState === "onboarding" && (
         <Onboarding onComplete={handleCompleteOnboarding} />
@@ -123,4 +103,56 @@ export default function App() {
   );
 }
 
-// --- KEEP YOUR LandingPage, Onboarding, and Dashboard components below this line ---
+// --- 3. LANDING PAGE ---
+const LandingPage = ({ onLogin, isAuthenticating, authError }) => (
+  <div className="flex flex-col min-h-screen items-center justify-center p-6 relative">
+    <div className="max-w-md w-full flex flex-col items-center z-10">
+      <div className="mb-12 flex items-center space-x-3 animate-fade-up">
+        <Leaf className="w-8 h-8 text-emerald-800" />
+        <h1 className="text-3xl font-serif text-stone-900">Inshape</h1>
+      </div>
+      <button 
+        onClick={onLogin} 
+        disabled={isAuthenticating}
+        className="w-full flex items-center justify-center space-x-3 bg-white border border-stone-200 py-3.5 px-6 rounded-2xl shadow-sm hover:shadow-md transition-all"
+      >
+        <span className="text-stone-700 font-medium">Continue with Google</span>
+      </button>
+      {authError && <p className="mt-4 text-rose-500 text-xs">{authError}</p>}
+    </div>
+  </div>
+);
+
+// --- 4. ONBOARDING ---
+const Onboarding = ({ onComplete }) => {
+  const [step, setStep] = useState(1);
+  const [formData, setFormData] = useState({ height: "", weight: "", goal: "" });
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-sm border border-stone-100">
+        <h2 className="text-2xl font-serif mb-6">Step {step} of 3</h2>
+        {step === 1 && (
+          <input 
+            type="number" placeholder="Weight (kg)" 
+            onChange={(e) => setFormData({...formData, weight: e.target.value})}
+            className="w-full p-4 bg-stone-50 rounded-xl mb-4"
+          />
+        )}
+        <button 
+          onClick={() => step < 3 ? setStep(step + 1) : onComplete(formData)}
+          className="w-full bg-emerald-800 text-white py-4 rounded-xl"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// --- 5. DASHBOARD ---
+const Dashboard = ({ onLogout, userProfile }) => (
+  <div className="p-10">
+    <h1 className="text-3xl font-serif">Welcome, {userProfile?.name}</h1>
+    <button onClick={onLogout} className="mt-10 text-rose-500">Sign Out</button>
+  </div>
+);
