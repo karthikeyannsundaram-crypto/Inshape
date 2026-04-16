@@ -18,144 +18,40 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-// --- FIREBASE SETUP ---
-// Using real Firebase Auth for Google OAuth 2.0
-import { initializeApp } from "firebase/app";
-import {
-  getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signOut,
-  onAuthStateChanged,
-} from "firebase/auth";
-
-// Initialize Firebase using environment config if available
-let auth, provider;
-try {
-  const firebaseConfig =
-    typeof __firebase_config !== "undefined"
-      ? JSON.parse(__firebase_config)
-      : {
-          apiKey: "dummy-key",
-          authDomain: "inshape-app.firebaseapp.com",
-          projectId: "inshape-app",
-        };
-  const app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  provider = new GoogleAuthProvider();
-} catch (error) {
-  console.error("Firebase initialization failed:", error);
-}
-
-// --- MAIN APP COMPONENT ---
-export default function App() {
-  const [appState, setAppState] = useState("login"); // 'login', 'onboarding', 'dashboard'
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [userProfile, setUserProfile] = useState(null);
-  const [authError, setAuthError] = useState("");
-
-  // Real Google OAuth 2.0 Login
+// --- FIXED: Real Google OAuth 2.0 Login Only ---
   const handleGoogleLogin = async () => {
     setIsAuthenticating(true);
     setAuthError("");
 
-    // Prevent Firebase throwing "unauthorized-domain" in the preview iframe
-    if (
-      typeof __firebase_config === "undefined" ||
-      window.location.protocol === "blob:" ||
-      window.location.hostname.includes("usercontent") ||
-      auth?.app?.options?.apiKey === "dummy-key"
-    ) {
-      setAuthError("Preview mode detected. Simulating Google login...");
-      setTimeout(() => {
-        setUserProfile({
-          name: "Preview User",
-          email: "hello@inshape.app",
-          photo:
-            "https://api.dicebear.com/7.x/notionists/svg?seed=Alex&backgroundColor=f5f5f4",
-        });
-        setAppState("onboarding");
-        setIsAuthenticating(false);
-      }, 1500);
-      return;
-    }
-
     try {
-      if (!auth) throw new Error("Firebase not configured properly.");
+      if (!auth || auth.app.options.apiKey === "dummy-key") {
+        throw new Error("Firebase is not configured. Please add your API keys.");
+      }
+
       // Triggers the real Google Sign-In popup
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
       // Successfully authenticated with Google!
-      setUserProfile((prev) => ({
-        ...prev,
+      setUserProfile({
         name: user.displayName,
         email: user.email,
         photo: user.photoURL,
-      }));
+      });
       setAppState("onboarding");
+      setIsAuthenticating(false);
+      
     } catch (error) {
       console.error("Google Auth Error:", error);
-      // IFRAME FALLBACK: Browsers block popups inside preview iframes.
-      // We provide a fallback so you can still test the app UI.
-      setAuthError(
-        "Google Sign-In popup was blocked by the preview window. Using secure fallback to let you in..."
-      );
-      setTimeout(() => {
-        setUserProfile({ name: "Guest User", email: "guest@example.com" });
-        setAppState("onboarding");
-        setIsAuthenticating(false);
-      }, 2500);
+      setIsAuthenticating(false);
+      
+      if (error.code === 'auth/unauthorized-domain') {
+        setAuthError("This domain isn't authorized in Firebase yet. Go to Firebase Console > Auth > Settings > Authorized Domains.");
+      } else {
+        setAuthError("Login failed. Please try again or check if popups are blocked.");
+      }
     }
   };
-
-  const handleCompleteOnboarding = (profileData) => {
-    setUserProfile((prev) => ({ ...prev, ...profileData }));
-    setAppState("dashboard");
-  };
-
-  const handleLogout = async () => {
-    try {
-      if (auth) await signOut(auth);
-      setAppState("login");
-      setUserProfile(null);
-    } catch (error) {
-      console.error("Logout Error:", error);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-[#FDFBF7] text-stone-800 font-sans selection:bg-emerald-100">
-      <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-up {
-          animation: fadeUp 0.6s ease-out forwards;
-          opacity: 0;
-        }
-        .delay-100 { animation-delay: 100ms; }
-        .delay-200 { animation-delay: 200ms; }
-        .delay-300 { animation-delay: 300ms; }
-      `}</style>
-
-      {appState === "login" && (
-        <LandingPage
-          onLogin={handleGoogleLogin}
-          isAuthenticating={isAuthenticating}
-          authError={authError}
-        />
-      )}
-      {appState === "onboarding" && (
-        <Onboarding onComplete={handleCompleteOnboarding} />
-      )}
-      {appState === "dashboard" && (
-        <Dashboard onLogout={handleLogout} userProfile={userProfile} />
-      )}
-    </div>
-  );
-}
 
 // --- LANDING & LOGIN PAGE ---
 const LandingPage = ({ onLogin, isAuthenticating, authError }) => {
