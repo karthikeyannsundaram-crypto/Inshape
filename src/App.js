@@ -4,7 +4,8 @@ import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
-import { Leaf, Activity, Target, User, ArrowRight, Sparkles } from "lucide-react";
+import { Leaf, Activity, Target, User, ArrowRight, Sparkles, Send, X } from "lucide-react";
+import { askInShapeAI } from './AiAssistant';
 
 // --- CONFIG ---
 const firebaseConfig = {
@@ -27,6 +28,12 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({ weight: "", goal: "", level: "Moderate" });
+  
+  // AI State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [aiInput, setAiInput] = useState("");
+  const [aiResponse, setAiResponse] = useState("");
+  const [isAiThinking, setIsAiThinking] = useState(false);
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
@@ -49,7 +56,18 @@ export default function App() {
     setProfile(data);
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-stone-50 text-emerald-800 font-bold">Initializing Inshape...</div>;
+  const handleAiAsk = async () => {
+    if (!aiInput) return;
+    setIsAiThinking(true);
+    // We send the user's profile context along with the question!
+    const context = `User Profile: ${profile.weight}kg, Goal: ${profile.goal}, Level: ${profile.level}. Question: ${aiInput}`;
+    const reply = await askInShapeAI(context);
+    setAiResponse(reply);
+    setIsAiThinking(false);
+    setAiInput("");
+  };
+
+  if (loading) return <div className="h-screen flex items-center justify-center bg-stone-50 text-emerald-800 font-bold italic text-xl">Initializing Inshape...</div>;
 
   // 1. LOGIN SCREEN
   if (!user) return (
@@ -136,7 +154,11 @@ export default function App() {
             <p className="text-xl font-medium leading-relaxed">
               Since your goal is <span className="text-emerald-300">{profile.goal}</span>, I recommend focusing on high-protein intake today and a 20-minute mobility session.
             </p>
-            <button className="mt-6 bg-white/10 backdrop-blur-md px-6 py-2 rounded-full text-sm border border-white/20">Ask Coach a Question</button>
+            <button 
+                onClick={() => setIsChatOpen(true)}
+                className="mt-6 bg-white/10 backdrop-blur-md px-6 py-2 rounded-full text-sm border border-white/20 hover:bg-white/20 transition-all">
+                Ask Coach a Question
+            </button>
           </div>
 
           {/* STATS CARD */}
@@ -149,8 +171,48 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* AI CHAT OVERLAY */}
+        <AnimatePresence>
+          {isChatOpen && (
+            <motion.div 
+              initial={{ opacity: 0, y: 100 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 100 }}
+              className="fixed bottom-0 left-0 right-0 p-4 z-50 flex justify-center"
+            >
+              <div className="bg-white w-full max-w-2xl shadow-2xl rounded-t-[2rem] p-6 border-t border-stone-200">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="font-bold text-stone-800 flex items-center"><Sparkles size={16} className="mr-2 text-emerald-600"/> InShape Assistant</h4>
+                  <button onClick={() => setIsChatOpen(false)} className="p-2 hover:bg-stone-100 rounded-full"><X size={20}/></button>
+                </div>
+                
+                <div className="mb-4 max-h-40 overflow-y-auto p-4 bg-stone-50 rounded-2xl text-stone-700 text-sm italic">
+                  {isAiThinking ? "Typing..." : aiResponse || "Ask me anything about your fitness journey!"}
+                </div>
+
+                <div className="flex space-x-2">
+                  <input 
+                    type="text" 
+                    value={aiInput}
+                    onChange={(e) => setAiInput(e.target.value)}
+                    placeholder="What should I eat after my workout?"
+                    className="flex-1 p-4 bg-stone-100 rounded-xl outline-none focus:ring-2 ring-emerald-500"
+                    onKeyPress={(e) => e.key === 'Enter' && handleAiAsk()}
+                  />
+                  <button 
+                    onClick={handleAiAsk}
+                    className="bg-emerald-800 text-white p-4 rounded-xl shadow-lg hover:bg-emerald-700 transition-all">
+                    <Send size={20} />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
 }
+EOF
 EOF
